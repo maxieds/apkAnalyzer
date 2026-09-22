@@ -1,71 +1,66 @@
+<div align="center">
+
 # APK Analyzer
 
-Android application analysis for local APKs and connected devices. Supports Windows, Linux, WSL, and macOS, with no third-party Python packages required for the core application.
+### Know what ships inside your APK.
 
-[Download](https://github.com/worldtreeboy/apkAnalyzer/releases/latest) · [Release notes](https://github.com/worldtreeboy/apkAnalyzer/releases) · [Issues](https://github.com/worldtreeboy/apkAnalyzer/issues)
+Find risky settings, spot potential secrets, and turn Android app analysis into shareable reports.
 
-## Features
+[![Download latest release](https://img.shields.io/badge/Download-latest_release-2ea44f?style=for-the-badge)](https://github.com/worldtreeboy/apkAnalyzer/releases/latest)
+[![Star on GitHub](https://img.shields.io/badge/Star_on_GitHub-facc15?style=for-the-badge&logo=github&logoColor=black)](https://github.com/worldtreeboy/apkAnalyzer)
 
-- **Static analysis:** manifest configuration, permissions, exported components, network policies, signing, code patterns, and hardcoded secrets.
-- **APK formats:** `.apk`, `.apks`, `.aab`, and directories containing split APKs.
-- **Device tools:** storage audits, runtime checks, logcat, screenshots, Frida integration, and APK patching.
-- **Reports:** JSON, HTML, and SARIF, with severity, confidence, source locations where available, and coverage details.
+[![CI](https://github.com/worldtreeboy/apkAnalyzer/actions/workflows/ci.yml/badge.svg)](https://github.com/worldtreeboy/apkAnalyzer/actions/workflows/ci.yml)
+![Python 3.8+](https://img.shields.io/badge/Python-3.8%2B-3776AB?logo=python&logoColor=white)
+[![MIT License](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
 
-## Requirements
+Windows · Linux · WSL · macOS
 
-| Workflow | Requirements |
-| --- | --- |
-| Local static scan | Python 3.8+, Java, and apktool |
-| Signing verification | apksigner; missing signing evidence makes coverage incomplete |
-| App Bundle (`.aab`) | Java and bundletool |
-| Connected device | ADB; root or Frida for selected features |
+</div>
 
-Local scans do not require ADB or a connected device. App Bundle scans may have incomplete coverage for dynamic-feature modules.
+## One app. A closer look.
 
-## Quick start
+- **Inspect what matters.** Manifest settings, permissions, exported components, network policies, signing, code patterns, and potential hardcoded secrets.
+- **Get evidence you can use.** Severity, confidence, remediation, and source locations where available. Missing coverage is marked `INCONCLUSIVE`.
+- **Take the report with you.** HTML for review, JSON for automation, SARIF for CI.
+- **Go deeper on a device.** Storage audits, runtime checks, logcat, screenshots, and Frida integration.
 
-Clone the repository or extract the complete [release ZIP](https://github.com/worldtreeboy/apkAnalyzer/releases/latest). Keep `apkAnalyzer.py` beside the included `apk_analyzer/` directory.
+Supports `.apk`, `.apks`, `.aab`, and split-APK folders. Local scans need no connected phone. The core uses only Python's standard library.
+
+## From APK to report
+
+Install **Python 3.8+, Java, and [apktool](https://apktool.org/docs/install/)**. Add **apksigner** to `PATH` for signing verification; missing signing evidence makes coverage incomplete.
+
+[Download the release ZIP](https://github.com/worldtreeboy/apkAnalyzer/releases/latest), extract it, and open a terminal in that folder. Keep `apkAnalyzer.py` beside `apk_analyzer/`.
 
 ```bash
-git clone https://github.com/worldtreeboy/apkAnalyzer.git
-cd apkAnalyzer
-python3 apkAnalyzer.py scan --apk app.apk --format json --output report.json
+python3 apkAnalyzer.py scan --apk app.apk --format html --output report.html
 ```
 
-Use `--format html` or `--format sarif` for other report formats. For `.aab` input, add `--bundletool /path/to/bundletool.jar`. Omitting `--output` creates a timestamped report.
+Open **`report.html`** to explore the results. On Windows, use `python` if that's your Python command.
 
-### CI
+<details>
+<summary><strong>CI, App Bundles, and connected devices</strong></summary>
+
+**CI:** export SARIF and fail on high-severity findings.
 
 ```bash
 python3 apkAnalyzer.py scan --apk app.apk --format sarif --output report.sarif --fail-on high
 ```
 
-`--fail-on` accepts `critical`, `high` (default), `medium`, `low`, `info`, or `none`.
+Exit codes: `0` = no findings meet the threshold; `1` = threshold met; `2` = scan failed or evidence incomplete. Incomplete coverage takes precedence. A completed scan does not establish that an app is vulnerability-free.
 
-| Exit code | Meaning |
-| --- | --- |
-| `0` | Scan completed; no findings met the threshold |
-| `1` | Scan completed; findings met the threshold |
-| `2` | Scan failed or required evidence was incomplete |
+**App Bundles:** use `--apk app.aab --bundletool /path/to/bundletool.jar`. Dynamic-feature coverage may be incomplete.
 
-`INCONCLUSIVE` identifies missing or incomplete evidence and takes precedence over finding thresholds. A completed scan does not establish that an application is vulnerability-free.
+**Device mode:** install ADB, enable USB debugging, connect your phone, and run `python3 apkAnalyzer.py`. Some features need root or Frida. Use `[r]` to export reports.
 
-### Device mode
+**More options:** `python3 apkAnalyzer.py scan --help`
 
-Enable USB debugging, connect the device, then run:
+**Run the tests:** `python3 -m unittest discover -s tests -q`
 
-```bash
-python3 apkAnalyzer.py
-```
+</details>
 
-Select an app and a tool from the menu. Use `[r]` to export JSON or HTML reports. For command options, run `python3 apkAnalyzer.py scan --help`.
+---
 
-## Development
+**Saved you time? [Give APK Analyzer a star ⭐](https://github.com/worldtreeboy/apkAnalyzer).** It helps others find the project.
 
-The launcher is `apkAnalyzer.py`; reusable modules live in `apk_analyzer/`. Run the regression suite without a connected device:
-
-```bash
-python3 -m unittest discover -s tests -q
-```
-
-Licensed under the [MIT License](LICENSE).
+[Report a bug](https://github.com/worldtreeboy/apkAnalyzer/issues) · [Release notes](https://github.com/worldtreeboy/apkAnalyzer/releases) · [Contribute a fix](https://github.com/worldtreeboy/apkAnalyzer/pulls)
