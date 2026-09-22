@@ -107,15 +107,25 @@ def _stat_timestamp_ns(path_stat, name):
     return int(getattr(path_stat, name) * 1_000_000_000)
 
 
-def _snapshot_signature(path_stat):
+def _snapshot_signature(path_stat, *, cross_source=False):
     """Fields that change if a source is replaced or modified during copy."""
+    change_time = _stat_timestamp_ns(path_stat, "st_ctime")
+    if cross_source and os.name == "nt":
+        # Windows CPython can return creation time from lstat but metadata
+        # change time from fstat in the same process. Compare birthtime when
+        # available across those APIs; retain ctime for before/after checks
+        # made through the same API so real metadata changes still fail.
+        change_time = (
+            _stat_timestamp_ns(path_stat, "st_birthtime")
+            if hasattr(path_stat, "st_birthtime") else None
+        )
     return (
         getattr(path_stat, "st_dev", None),
         getattr(path_stat, "st_ino", None),
         stat.S_IFMT(path_stat.st_mode),
         path_stat.st_size,
         _stat_timestamp_ns(path_stat, "st_mtime"),
-        _stat_timestamp_ns(path_stat, "st_ctime"),
+        change_time,
         getattr(path_stat, "st_file_attributes", 0),
     )
 
@@ -214,8 +224,8 @@ def _snapshot_regular_file(source_path, destination, max_bytes, *,
         if (_is_link_or_reparse_point(opened_stat)
                 or not stat.S_ISREG(opened_stat.st_mode)
                 or not _same_file_identity(initial_stat, opened_stat)
-                or _snapshot_signature(initial_stat)
-                != _snapshot_signature(opened_stat)):
+                or _snapshot_signature(initial_stat, cross_source=True)
+                != _snapshot_signature(opened_stat, cross_source=True)):
             raise InputPreparationError(
                 f"input changed while it was being opened: {display_path}"
             )
@@ -255,7 +265,7 @@ def _snapshot_regular_file(source_path, destination, max_bytes, *,
                 != _snapshot_signature(opened_stat)
                 or not _same_file_identity(final_path_stat, opened_stat)
                 or _snapshot_signature(final_path_stat)
-                != _snapshot_signature(opened_stat)
+                != _snapshot_signature(initial_stat)
                 or _is_link_or_reparse_point(final_path_stat)):
             raise InputPreparationError(
                 f"input changed while it was being snapshotted: {display_path}"

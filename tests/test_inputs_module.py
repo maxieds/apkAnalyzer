@@ -460,6 +460,83 @@ class InputModuleTests(unittest.TestCase):
                 inputs._make_snapshot_read_only(artifact)
             chmod.assert_not_called()
 
+    def test_windows_snapshot_accepts_different_path_and_handle_ctimes(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source = Path(temp_dir, "source.apk")
+            destination = Path(temp_dir, "snapshot.apk")
+            source.write_bytes(b"unchanged input")
+            path_stat = os.lstat(source)
+            handle_stat = types.SimpleNamespace(**{
+                name: getattr(path_stat, name)
+                for name in dir(path_stat) if name.startswith("st_")
+            })
+            handle_stat.st_ctime_ns -= 10_000_000_000
+            handle_stat.st_ctime -= 10
+            real_fstat = os.fstat
+
+            def windows_fstat(descriptor):
+                result = real_fstat(descriptor)
+                return (handle_stat if os.path.samestat(path_stat, result)
+                        else result)
+
+            with mock.patch.object(inputs.os, "name", "nt"), \
+                    mock.patch.object(inputs.os, "fstat", side_effect=windows_fstat):
+                inputs._snapshot_regular_file(source, destination, 1024)
+
+            self.assertEqual(destination.read_bytes(), source.read_bytes())
+
+    def test_windows_snapshot_still_rejects_ctime_changes_during_copy(self):
+        for changed_api in ("lstat", "fstat"):
+            with self.subTest(changed_api=changed_api), \
+                    tempfile.TemporaryDirectory() as temp_dir:
+                source = Path(temp_dir, "source.apk")
+                destination = Path(temp_dir, "snapshot.apk")
+                source.write_bytes(b"unchanged size and mtime")
+                path_stat = os.lstat(source)
+                real_stat = getattr(os, changed_api)
+                source_calls = 0
+
+                def changing_stat(*args, **kwargs):
+                    nonlocal source_calls
+                    result = real_stat(*args, **kwargs)
+                    if not os.path.samestat(path_stat, result):
+                        return result
+                    source_calls += 1
+                    changed = types.SimpleNamespace(**{
+                        name: getattr(result, name)
+                        for name in dir(result) if name.startswith("st_")
+                    })
+                    # Keep each API stable initially, then change only its
+                    # ctime after copying, with all content metadata unchanged.
+                    changed.st_ctime_ns = path_stat.st_ctime_ns
+                    if changed_api == "fstat":
+                        changed.st_ctime_ns -= 10_000_000_000
+                    if source_calls > 1:
+                        changed.st_ctime_ns += 1_000_000_000
+                    return changed
+
+                with mock.patch.object(inputs.os, "name", "nt"), \
+                        mock.patch.object(inputs.os, changed_api,
+                                          side_effect=changing_stat):
+                    with self.assertRaisesRegex(
+                            inputs.InputPreparationError, "changed.*snapshotted"):
+                        inputs._snapshot_regular_file(source, destination, 1024)
+
+                self.assertFalse(destination.exists())
+
+    def test_posix_snapshot_still_compares_ctime_across_stat_apis(self):
+        before = types.SimpleNamespace(
+            st_dev=1, st_ino=2, st_mode=0o100600, st_size=10,
+            st_mtime_ns=100, st_ctime_ns=200,
+        )
+        after = types.SimpleNamespace(**vars(before))
+        after.st_ctime_ns += 1
+        with mock.patch.object(inputs.os, "name", "posix"):
+            self.assertNotEqual(
+                inputs._snapshot_signature(before, cross_source=True),
+                inputs._snapshot_signature(after, cross_source=True),
+            )
+
     def test_path_fallback_also_snapshots_directory_apks(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
